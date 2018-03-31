@@ -1,0 +1,477 @@
+<div id="signDiv">
+	Pseudo : <input id="signDiv-pseudo" type="text"></input>
+	<button id="signDiv-signIn">Commencer</button>
+</div>
+
+<div id="gameDiv" style="display:none">
+	<canvas id="ctx" width="1000" height="600" style="border:1px solid black"></canvas>
+	<canvas id="ctx-ui" width="1000" height="600" style="position:absolute;top:8px;z-index:999;left:8px;border:1px solid black"></canvas>
+
+	<div id="chat-text" style="width:500px;height:100px;overflox-y:scroll">
+		<div>Chattez ici</div>
+	</div>
+
+	<form id="chat-form">
+		<input id="chat-input" type="text" style="width:500px"></input/>
+	</form>
+</div>
+
+<script src="https://cdn.socket.io/socket.io-1.4.5.js"></script>
+
+<script>
+	var WIDTH = 1000;
+	var HEIGHT = 600;
+	var socket = io();
+	//connexion
+	var gameDiv = document.getElementById('gameDiv');
+	var signDiv = document.getElementById('signDiv');
+	var signDivPseudo = document.getElementById('signDiv-pseudo');
+	var signDivSignin = document.getElementById('signDiv-signIn');
+	
+	signDivSignin.onclick = function() {
+		socket.emit('signIn', {pseudo:signDivPseudo.value});
+	}
+	
+	
+	socket.on('signInResponse', function(data) {
+		if(data.success) {
+			signDiv.style.display = 'none';
+			gameDiv.style.display = 'inline-block';
+		}else {
+			alert('pseudo incorrect');
+		}
+	});
+	
+	//chat
+	var chatText = document.getElementById('chat-text');
+	var chatInput = document.getElementById('chat-input');
+	var chatForm = document.getElementById('chat-form');
+	
+	socket.on('addToChat',function(data) {
+		console.log(data);
+		chatText.innerHTML += '<div>'+data+'</div>';
+	});
+	
+	socket.on('evalAnswer',function(data) {
+		console.log(data);
+		
+	});
+	
+	chatForm.onsubmit = function(e) {
+		e.preventDefault();
+		
+		if(chatInput.value[0] === '/')
+			socket.emit('evalServer', chatInput.value.slice(1));
+		else 
+			socket.emit('sendMsgServer', chatInput.value);
+		chatInput.value = '';
+	}
+	
+	
+	
+	//jeu
+	var canvas = document.getElementById("ctx");
+	var ctx = canvas.getContext("2d");									
+	var ctxUi = document.getElementById("ctx-ui").getContext("2d");
+	ctxUi.font = '30px Arial';
+									
+	var Img = {};
+	Img.player = new Image();
+	Img.player.src = '/client/img/player.png';
+	Img.bullet = new Image();
+	Img.bullet.src = '/client/img/bullet.png';
+	Img.target = new Image();
+	Img.target.src = '/client/img/target.png';
+	Img.food = new Image();
+	Img.food.src = '/client/img/food.png';
+	
+	
+	Img.map = new Image();
+	Img.map.src = '/client/img/map.jpg';
+	
+	
+	
+	var Player = function(initPack) {
+		var self = {};
+		self.id = initPack.id;
+		self.number = initPack.number;
+		self.x = initPack.x;
+		self.y = initPack.y;
+		self.hp = initPack.hp;
+		self.hpmax = initPack.hpmax;
+		self.score = initPack.score;
+		self.map = initPack.map;
+		
+		self.draw = function() {
+			if(Player.list[selfId].map !== self.map)
+				return;
+			var x = self.x - Player.list[selfId].x + WIDTH/2;
+			var y = self.y - Player.list[selfId].y + HEIGHT/2;
+			
+			var hpwidth = 30 * self.hp / self.hpmax;
+			ctx.fillStyle = 'red';
+			ctx.fillRect(x - hpwidth/2, y - 40, hpwidth,4);
+			
+			var width = Img.player.width;
+			var height = Img.player.height;
+			
+			
+			
+			ctx.drawImage(Img.player,
+				0, 0, Img.player.width, Img.player.height,
+				x-width/2, y-height/2, width, height);
+			
+			
+			//ctx.fillText(self.score, self.x, self.y - 60);
+			
+		}
+		
+		Player.list[self.id] = self;
+		
+		return self;
+	}
+	Player.list = {};
+	
+	var Bullet = function(initPack) {
+		var self = {};
+		self.id = initPack.id;
+		self.number = initPack.number;
+		self.x = initPack.x;
+		self.y = initPack.y;
+		self.map = initPack.map;
+		
+		self.draw = function() {
+			if(Player.list[selfId].map !== self.map)
+				return;
+			var width = Img.player.width/2;
+			var height = Img.player.height/2;
+			
+			var x = self.x - Player.list[selfId].x + WIDTH/2;
+			var y = self.y - Player.list[selfId].y + HEIGHT/2;
+			
+			ctx.beginPath();
+			ctx.arc(x-width/2, y-height/2, 3, 0, 2 * Math.PI, false);
+			ctx.fillStyle = 'red';
+			ctx.fill();
+			ctx.lineWidth = 1;
+			/*
+			ctx.drawImage(Img.bullet,
+				0, 0, Img.bullet.width, Img.bullet.height,
+				x-width/2, y-height/2, width, height);
+			*/
+		}
+		
+		Bullet.list[self.id] = self;
+		
+		return self;
+	}
+	Bullet.list = {};
+	
+	
+	var Target = function(initPack) {
+		var self = {};
+		self.id = initPack.id;		
+		self.x = initPack.x;
+		self.y = initPack.y;
+		self.parent = initPack.par;
+		self.draw = function() {
+			var width = Img.target.width/2;
+			var height = Img.target.height/2;
+			
+			var x = self.x - Player.list[selfId].x + WIDTH/2;
+			var y = self.y - Player.list[selfId].y + HEIGHT/2;
+			
+			ctx.drawImage(Img.target,
+				0, 0, Img.target.width, Img.target.height,
+				x-width/2, y-height/2, width, height);
+		}
+		
+		Target.list[self.id] = self;
+		
+		return self;
+	}
+	Target.list = {};
+	
+	
+	var Food = function(initPack) {
+		var self = {};
+		self.id = initPack.id;		
+		self.x = initPack.x;
+		self.y = initPack.y;
+		self.hp = initPack.hp;
+		self.hpmax = initPack.hpmax;
+		self.color = initPack.color;
+		self.draw = function() {
+			
+			
+			var x = self.x - Player.list[selfId].x + WIDTH/2;
+			var y = self.y - Player.list[selfId].y + HEIGHT/2;
+			/*
+			var hpwidth = 30 * self.hp / self.hpmax;
+			ctx.fillStyle = 'red';
+			ctx.fillRect(x - hpwidth/2, y - 40, hpwidth,4);
+			*/
+			ctx.save();
+			ctx.beginPath();
+			ctx.shadowColor = self.color;
+			ctx.shadowBlur = 15;
+			ctx.shadowOffsetX = 0;
+			ctx.shadowOffsetY = 0;
+			ctx.arc(x-8, y-8, 8, 0, 2 * Math.PI, false);
+			ctx.fillStyle = self.color;
+			ctx.fill();
+			ctx.lineWidth = 1;
+			ctx.restore();
+			
+			
+		}
+		
+		Food.list[self.id] = self;
+		
+		return self;
+	}
+	Food.list = {};
+	
+	var selfId = null;
+	
+	
+	socket.on('init', function(data) {
+		if(data.selfId) 
+			selfId = data.selfId;
+			
+		for(var i =0; i < data.player.length; i++) {
+			new Player(data.player[i]);
+		}
+		
+		for(var i =0; i < data.bullet.length; i++) {
+			new Bullet(data.bullet[i]);
+		}
+		
+		for(var i =0; i < data.target.length; i++) {
+			new Target(data.target[i]);
+		}
+		
+		for(var i =0; i < data.food.length; i++) {
+			new Food(data.food[i]);
+		}
+	});
+	
+	
+	socket.on('update',function(data) {
+		for(var i=0;i < data.player.length; i++) {
+			var pack = data.player[i];
+			var p = Player.list[pack.id];
+			if(p) {
+				if(pack.x !== undefined)
+					p.x = pack.x;
+				if(pack.y !== undefined)
+					p.y = pack.y;
+				if(pack.hp !== undefined)
+					p.hp = pack.hp;
+				if(pack.score !== undefined)
+					p.score = pack.score;
+			}
+		}
+		
+		for(var i=0;i < data.bullet.length; i++) {
+			var pack = data.bullet[i];
+			var b = Bullet.list[pack.id];
+			if(b) {
+				if(pack.x !== undefined)
+					b.x = pack.x;
+				if(pack.y !== undefined)
+					b.y = pack.y;
+			}
+		}
+		
+		for(var i=0;i < data.target.length; i++) {
+			var pack = data.target[i];
+			var t = Target.list[pack.id];
+			if(t) {
+				if(pack.x !== undefined)
+					t.x = pack.x;
+				if(pack.y !== undefined)
+					t.y = pack.y;
+			}
+		}
+		
+		for(var i=0;i < data.food.length; i++) {
+			var pack = data.food[i];
+			var f = Food.list[pack.id];
+			if(f) {
+				if(pack.hp !== undefined)
+					f.hp = pack.hp;
+				if(pack.x !== undefined)
+					f.x = pack.x;
+				if(pack.y !== undefined)
+					f.y = pack.y;
+			}
+		}
+	});
+	
+	
+	socket.on('remove', function(data) {
+		for(var i =0; i < data.player.length;i++) {
+			delete Player.list[data.player[i]];
+		}
+		for(var i =0; i < data.bullet.length;i++) {
+			var x = Bullet.list[data.bullet[i]].x - Player.list[selfId].x + WIDTH/2;
+			var y = Bullet.list[data.bullet[i]].y - Player.list[selfId].y + HEIGHT/2;
+			BOOM(x,y);
+			delete Bullet.list[data.bullet[i]];
+			
+		}
+		for(var i =0; i < data.target.length;i++) {
+			
+			delete Target.list[data.target[i]];
+			
+		}
+		
+		for(var i =0; i < data.food.length;i++) {
+			
+			delete Food.list[data.food[i]];
+			
+		}
+	});
+	
+	
+	setInterval(function() {
+		if(!selfId)
+			return;
+		ctx.clearRect(0,0,WIDTH,HEIGHT);
+		drawMap();
+		drawScore();
+		for(var i in Player.list) 
+			Player.list[i].draw();
+			
+		for(var i in Bullet.list) 
+			Bullet.list[i].draw();
+			
+		for(var i in Target.list) 
+			Target.list[i].draw();
+			
+		for(var i in Food.list) 
+			Food.list[i].draw();	
+	},40);
+	
+	
+	var drawMap = function() {
+		var player = Player.list[selfId];
+		
+		
+		var x = WIDTH/2 - player.x;
+		var y = HEIGHT/2 - player.y;
+		ctx.drawImage(Img.map,x,y);
+
+		
+		
+		var wtwo = WIDTH / 2;
+		var htwo = HEIGHT / 2;
+		
+		var xc = parseInt(player.x / wtwo);
+		var yc = parseInt(player.y / htwo);
+		
+		
+		var newX1 = (xc * wtwo) + x;		
+		var newY1 = (yc * htwo) + y;
+		
+		var newX2 = ((xc-1) * wtwo) + x;
+		var newY2 = (yc * htwo) + y;
+		
+		var newX3 = (xc * wtwo) + x;
+		var newY3 = ((yc-1) * htwo) + y;
+		
+		var newX4 = ((xc-1) * wtwo) + x;
+		var newY4 = ((yc-1) * htwo) + y;
+		
+		ctx.drawImage(Img.map,newX1,newY1);
+		ctx.drawImage(Img.map,newX2,newY2);
+		ctx.drawImage(Img.map,newX3,newY3);
+		ctx.drawImage(Img.map,newX4,newY4);
+		
+		if(xc < 0 && yc < 0) {
+			
+		}
+		if(yc < 0) {
+			
+			
+		}
+		if(xc < 0) {
+			
+		}
+		
+		var rectX = x - 15;
+		var rectY = y - 15;
+		ctx.beginPath();
+		ctx.lineWidth="6";
+		ctx.strokeStyle="red";
+		ctx.rect(rectX,rectY,3015,1815); 
+		ctx.stroke();
+		
+		
+	}
+	
+	var drawScore = function() {
+		if(lastScore === Player.list[selfId].score)
+			return;
+		lastScore = Player.list[selfId].score;
+		ctxUi.clearRect(0,0,WIDTH,HEIGHT);
+		ctxUi.fillStyle = 'white';
+		ctxUi.fillText(Player.list[selfId].score,0,30);
+	}
+	
+	var lastScore = null;
+	
+	document.onkeydown = function(event) {
+		if(event.keyCode === 68) //d
+			socket.emit('keyPress', {inputId:'right',state:true});
+		else if(event.keyCode === 83) //s
+			socket.emit('keyPress', {inputId:'down',state:true});
+		else if(event.keyCode === 81) //q
+			socket.emit('keyPress', {inputId:'left',state:true});
+		else if(event.keyCode === 90) //z
+			socket.emit('keyPress', {inputId:'up',state:true});
+		
+	}
+	
+	document.onkeyup = function(event) {
+		if(event.keyCode === 68) //d
+			socket.emit('keyPress', {inputId:'right',state:false});
+		else if(event.keyCode === 83) //s
+			socket.emit('keyPress', {inputId:'down',state:false});
+		else if(event.keyCode === 81) //q
+			socket.emit('keyPress', {inputId:'left',state:false});
+		else if(event.keyCode === 90) //z
+			socket.emit('keyPress', {inputId:'up',state:false});
+		
+	}
+	
+	document.onmousedown = function(event) {
+		var rect = canvas.getBoundingClientRect();
+		var x = event.clientX - rect.left;
+		var y = event.clientY - rect.top;
+		var target = {x:x,y:y};
+		//console.log(target);
+		
+		socket.emit('keyPress', {inputId:'attack',state:target});
+	}
+	/*
+	document.onmousedown = function(event) {
+		socket.emit('keyPress', {inputId:'attack',state:true});
+	}
+	*/
+	document.onmouseup = function(event) {
+		socket.emit('keyPress', {inputId:'attack',state:false});
+	}
+	
+	document.onmousemove = function(event) {
+		var x = -WIDTH/2 + event.clientX -8;
+		var y = -HEIGHT/2 + event.clientY -8;
+		var angle = Math.atan2(y,x) / Math.PI * 180;
+		
+		socket.emit('keyPress', {inputId:'mouseAngle',state:angle});
+	}
+	
+	
+</script>
+<script src="/client/js/particles.js"></script>
