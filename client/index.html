@@ -1,3 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<title>sandbox shooter</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<style>
+		label {
+			display:block;
+			margin: 10px 0;
+		}
+		label input {
+			float: right;
+			margin-right: 10px;
+			background: white;
+			border: 0;
+			color: #ff0081;
+			font-weight: bold;
+			text-align: center;
+		}
+		label button {
+			float: right;
+		}
+	</style>
+</head>
+<body>
+	
+
 <div id="signDiv">
 	Pseudo : <input id="signDiv-pseudo" type="text"></input>
 	<button id="signDiv-signIn">Commencer</button>
@@ -6,7 +35,24 @@
 <div id="gameDiv" style="display:none">
 	<canvas id="ctx" width="1000" height="600" style="border:1px solid black"></canvas>
 	<canvas id="ctx-ui" width="1000" height="600" style="position:absolute;top:8px;z-index:999;left:8px;border:1px solid black"></canvas>
-
+	<div style="position: absolute;right: 0;top: 20px;width: 250px;">
+		<h1>Score : <span id="score"></span></h1>
+		<label>
+			Cadence de tir :
+			<input disabled type="number" id="fireRate" value="20" min="4" max="20" />
+			<button id="fireRateBtn" onClick="upgradeFireRate()">+</button>
+		</label>
+		<label>
+			Vitesse projectiles :
+			<input disabled type="number" id="bulletVelocity" value="10" min="1" max="40" />
+			<button id="bulletVelocityBtn" onClick="upgradeBulletVelocity()">+</button>
+		</label>
+		<label>
+			Canons :
+			<input disabled type="number" id="canons" value="0" min="0" max="10" />
+			<button id="canonsBtn" onClick="upgradeCanons()">+</button>
+		</label>
+	</div>
 	<div id="chat-text" style="width:500px;height:100px;overflox-y:scroll">
 		<div>Chattez ici</div>
 	</div>
@@ -27,6 +73,20 @@
 	var signDiv = document.getElementById('signDiv');
 	var signDivPseudo = document.getElementById('signDiv-pseudo');
 	var signDivSignin = document.getElementById('signDiv-signIn');
+	var stats = {
+		fireRate: {
+			min: 4,
+			max: 20,
+		},
+		bulletVelocity: {
+			min: 1,
+			max: 40,
+		},
+		canons: {
+			min: 0,
+			max: 10
+		}
+	}
 	
 	signDivSignin.onclick = function() {
 		socket.emit('signIn', {pseudo:signDivPseudo.value});
@@ -41,11 +101,43 @@
 			alert('pseudo incorrect');
 		}
 	});
+	//stats
+	var fireRateInput = document.getElementById('fireRate');
+	var canonsInput = document.getElementById('canons');
+	var bulletVelocityInput = document.getElementById('bulletVelocity');
 	
+	canonsInput.onchange = function() {
+		socket.emit('updateCanons', {value: canonsInput.value});
+	}
+	function upgradeFireRate() {
+		console.log(Player.list[selfId].score)
+		if(Player.list[selfId].score > 10 
+		&& fireRateInput.value > stats.fireRate.min) {
+			fireRateInput.value -= 1;
+			socket.emit('updateFireRate', {value: fireRateInput.value});
+		}
+		
+	}
+	function upgradeBulletVelocity() {
+		if(Player.list[selfId].score > 10 
+		&& bulletVelocityInput.value < stats.bulletVelocity.max) {
+			bulletVelocityInput.value = parseInt(bulletVelocityInput.value) + 1;
+			socket.emit('updateBulletVelocity', {value: bulletVelocityInput.value});
+		}
+	}
+	function upgradeCanons() {
+		if(Player.list[selfId].score > 10
+		&& canonsInput.value < stats.canons.max) {
+			canonsInput.value = parseInt(canonsInput.value) + 1;
+			socket.emit('updateCanons', {value: canonsInput.value});
+		}
+	}
+
 	//chat
 	var chatText = document.getElementById('chat-text');
 	var chatInput = document.getElementById('chat-input');
 	var chatForm = document.getElementById('chat-form');
+	
 	
 	socket.on('addToChat',function(data) {
 		console.log(data);
@@ -101,6 +193,7 @@
 		self.hpmax = initPack.hpmax;
 		self.score = initPack.score;
 		self.map = initPack.map;
+		self.pseudo = initPack.pseudo;
 		
 		self.draw = function() {
 			if(Player.list[selfId].map !== self.map)
@@ -111,7 +204,7 @@
 			var hpwidth = 30 * self.hp / self.hpmax;
 			ctx.fillStyle = 'red';
 			ctx.fillRect(x - hpwidth/2, y - 40, hpwidth,4);
-			
+			ctx.fillText(self.pseudo,x - 40,y - 20);
 			var width = Img.player.width;
 			var height = Img.player.height;
 			
@@ -418,6 +511,7 @@
 		ctxUi.clearRect(0,0,WIDTH,HEIGHT);
 		ctxUi.fillStyle = 'white';
 		ctxUi.fillText(Player.list[selfId].score,0,30);
+		document.getElementById('score').innerHTML = lastScore;
 	}
 	
 	var lastScore = null;
@@ -475,3 +569,5 @@
 	
 </script>
 <script src="/client/js/particles.js"></script>
+</body>
+</html>

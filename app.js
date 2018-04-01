@@ -89,6 +89,7 @@ var Entity = function(param) {
 var Player = function(param) {
 	var self = Entity(param);
 	
+	self.pseudo = param.pseudo;
 	self.number="" + Math.floor(10 * Math.random());
 	self.pressingRight = false;
 	self.pressingLeft = false;
@@ -102,6 +103,8 @@ var Player = function(param) {
 	self.score = 0;
 	self.canShoot = 0;
 	self.fireRate = 20;
+	self.canons = 0;
+	self.bulletVelocity = 10;
 	
 	
 	var super_update = self.update;
@@ -117,26 +120,19 @@ var Player = function(param) {
 			//console.log({x:self.x,y:self.y});
 			if(self.canShoot == 0) {
 				self.canShoot = parseInt(self.fireRate);
-				if(self.score < 50) {
-					self.shootBullet(self.mouseAngle, self.pressingAttack);
-				}else if(self.score < 100) {
+				var canonAngle = 0;
+				for(var i =0; i <= self.canons; i++) {
+					if(canonAngle > 0) {
+						canonAngle = - canonAngle;
+					}
+					else {
+						canonAngle = 20 * i;
+					}
 					
-					self.shootBullet(self.mouseAngle, self.pressingAttack);
-					self.shootBullet((self.mouseAngle - 20), self.pressingAttack);
-					self.shootBullet((self.mouseAngle + 20), self.pressingAttack);
-				}else if(self.score <300) {
 					
-					self.shootBullet(self.mouseAngle, self.pressingAttack);
-					self.shootBullet((self.mouseAngle - 20), self.pressingAttack);
-					self.shootBullet((self.mouseAngle + 20), self.pressingAttack);
-					self.shootBullet((self.mouseAngle - 10), self.pressingAttack);
-					self.shootBullet((self.mouseAngle + 10), self.pressingAttack);
-				}else {
-					self.shootBullet(self.mouseAngle, self.pressingAttack);
-					self.shootBullet(self.mouseAngle, self.pressingAttack);
-					self.shootBullet(self.mouseAngle, self.pressingAttack);
-					
+					self.shootBullet((self.mouseAngle + canonAngle), self.pressingAttack);
 				}
+
 					 
 			}
 				
@@ -159,6 +155,7 @@ var Player = function(param) {
 			x:self.x,
 			y:self.y,
 			map:self.map,
+			velocity:self.bulletVelocity
 		});
 		/*
 		Target({
@@ -193,6 +190,7 @@ var Player = function(param) {
 	self.getInitPack = function() {
 		return {
 			id:self.id,
+			pseudo:self.pseudo,
 			x:self.x,
 			y:self.y,
 			number:self.number,
@@ -208,6 +206,7 @@ var Player = function(param) {
 	self.getUpdatePack = function() {
 		return {
 			id:self.id,
+			pseudo:self.pseudo,
 			x:self.x,
 			y:self.y,
 			number:self.number,
@@ -224,11 +223,12 @@ var Player = function(param) {
 }
 
 Player.list = {};
-Player.onConnect = function(socket) {
+Player.onConnect = function(socket, pseudo) {
 
 	
 	var player = Player({
 		id:socket.id,
+		pseudo: pseudo
 	});
 	
 	socket.on('keyPress',function(data) {
@@ -245,6 +245,19 @@ Player.onConnect = function(socket) {
 		else if(data.inputId === 'mouseAngle') 
 			player.mouseAngle = data.state;
 		
+	});
+
+	socket.on('updateFireRate', function(data) {
+		player.score -= 10;
+		player.fireRate = data.value;
+	});
+	socket.on('updateCanons', function(data) {
+		player.score -= 10;
+		player.canons = data.value;
+	});
+	socket.on('updateBulletVelocity', function(data) {
+		player.score -= 10;
+		player.bulletVelocity = data.value;
 	});
 	
 	
@@ -287,8 +300,8 @@ var Bullet = function(param) {
 	var self = Entity(param);
 	self.id = Math.random();
 	self.angle = param.angle;
-	self.spdX = Math.cos(param.angle/180*Math.PI) * 10;
-	self.spdY = Math.sin(param.angle/180*Math.PI) * 10;
+	self.spdX = Math.cos(param.angle/180*Math.PI) * param.velocity;
+	self.spdY = Math.sin(param.angle/180*Math.PI) * param.velocity;
 	self.target = param.target;
 	self.parent = param.parent;
 	self.timer = 0;
@@ -321,12 +334,14 @@ var Bullet = function(param) {
 					var shooter = Player.list[self.parent];
 					if(shooter) {
 						shooter.score += 1;
+						/*
 						if(shooter.score == 50
 							|| shooter.score == 100
 							|| shooter.score == 300) {
 							shooter.fireRate = 20;
 						}
 						shooter.updateFireRate(0.2);
+						*/
 					}
 						
 					
@@ -602,7 +617,7 @@ io.sockets.on('connection', function(socket) {
 	
 	socket.on('signIn',function(data) {
 		if(data.pseudo != '') {
-			Player.onConnect(socket);
+			Player.onConnect(socket, data.pseudo);
 			socket.emit('signInResponse', {success:true});
 		}else {
 			socket.emit('signInResponse', {success:false});
@@ -610,9 +625,6 @@ io.sockets.on('connection', function(socket) {
 		
 		
 	});
-	
-	
-	
 	
 	
 	socket.on('disconnect',function() {
