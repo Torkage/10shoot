@@ -52,6 +52,11 @@
 			<input disabled type="number" id="canons" value="0" min="0" max="10" />
 			<button id="canonsBtn" onClick="upgradeCanons()">+</button>
 		</label>
+		<label>
+			Taille bombes :
+			<input disabled type="number" id="bombRadius" value="100" min="100" max="200" />
+			<button id="bombRadiusBtn" onClick="upgradeBombRadius()">+</button>
+		</label>
 	</div>
 	<div id="chat-text" style="width:500px;height:100px;overflox-y:scroll">
 		<div>Chattez ici</div>
@@ -85,7 +90,11 @@
 		canons: {
 			min: 0,
 			max: 10
-		}
+		},
+		bombRadius: {
+			min: 100,
+			max: 200
+		},
 	}
 	
 	signDivSignin.onclick = function() {
@@ -105,6 +114,7 @@
 	var fireRateInput = document.getElementById('fireRate');
 	var canonsInput = document.getElementById('canons');
 	var bulletVelocityInput = document.getElementById('bulletVelocity');
+	var bombRadiusInput = document.getElementById('bombRadius');
 	
 	canonsInput.onchange = function() {
 		socket.emit('updateCanons', {value: canonsInput.value});
@@ -130,6 +140,13 @@
 		&& canonsInput.value < stats.canons.max) {
 			canonsInput.value = parseInt(canonsInput.value) + 1;
 			socket.emit('updateCanons', {value: canonsInput.value});
+		}
+	}
+	function upgradeBombRadius() {
+		if(Player.list[selfId].score > 10
+		&& bombRadiusInput.value < stats.bombRadius.max) {
+			bombRadiusInput.value = parseInt(bombRadiusInput.value) + 10;
+			socket.emit('updateBombRadius', {value: bombRadiusInput.value});
 		}
 	}
 
@@ -259,6 +276,43 @@
 		return self;
 	}
 	Bullet.list = {};
+
+
+	var Bomb = function(initPack) {
+		var self = {};
+		self.id = initPack.id;
+		self.number = initPack.number;
+		self.x = initPack.x;
+		self.y = initPack.y;
+		self.radius = initPack.radius;
+		self.map = initPack.map;
+		
+		self.draw = function() {
+			if(Player.list[selfId].map !== self.map)
+				return;
+			var width = Img.player.width/2;
+			var height = Img.player.height/2;
+			console.log(self.radius)
+			var x = self.x - Player.list[selfId].x + WIDTH/2;
+			var y = self.y - Player.list[selfId].y + HEIGHT/2;
+			
+			ctx.beginPath();
+			ctx.arc(x-width/2, y-height/2, self.radius, 0, 2 * Math.PI, false);
+			ctx.strokeStyle = 'blue';
+			ctx.lineWidth = 1;
+			ctx.stroke();
+			/*
+			ctx.drawImage(Img.bullet,
+				0, 0, Img.bullet.width, Img.bullet.height,
+				x-width/2, y-height/2, width, height);
+			*/
+		}
+		
+		Bomb.list[self.id] = self;
+		
+		return self;
+	}
+	Bomb.list = {};
 	
 	
 	var Target = function(initPack) {
@@ -339,6 +393,9 @@
 		for(var i =0; i < data.bullet.length; i++) {
 			new Bullet(data.bullet[i]);
 		}
+		for(var i =0; i < data.bomb.length; i++) {
+			new Bomb(data.bomb[i]);
+		}
 		
 		for(var i =0; i < data.target.length; i++) {
 			new Target(data.target[i]);
@@ -374,6 +431,18 @@
 					b.x = pack.x;
 				if(pack.y !== undefined)
 					b.y = pack.y;
+			}
+		}
+		for(var i=0;i < data.bomb.length; i++) {
+			var pack = data.bomb[i];
+			var b = Bomb.list[pack.id];
+			if(b) {
+				if(pack.x !== undefined)
+					b.x = pack.x;
+				if(pack.y !== undefined)
+					b.y = pack.y;
+				if(pack.radius != undefined)
+					b.radius = pack.radius
 			}
 		}
 		
@@ -414,6 +483,11 @@
 			delete Bullet.list[data.bullet[i]];
 			
 		}
+		for(var i =0; i < data.bomb.length;i++) {
+			
+			delete Bomb.list[data.bomb[i]];
+			
+		}
 		for(var i =0; i < data.target.length;i++) {
 			
 			delete Target.list[data.target[i]];
@@ -445,6 +519,8 @@
 			
 		for(var i in Food.list) 
 			Food.list[i].draw();	
+		for(var i in Bomb.list) 
+			Bomb.list[i].draw();	
 	},40);
 	
 	
@@ -525,6 +601,8 @@
 			socket.emit('keyPress', {inputId:'left',state:true});
 		else if(event.keyCode === 90) //z
 			socket.emit('keyPress', {inputId:'up',state:true});
+		else if(event.keyCode === 32) //z
+			socket.emit('keyPress', {inputId:'bomb',state:true});
 		
 	}
 	
@@ -537,6 +615,8 @@
 			socket.emit('keyPress', {inputId:'left',state:false});
 		else if(event.keyCode === 90) //z
 			socket.emit('keyPress', {inputId:'up',state:false});
+		else if(event.keyCode === 32) //z
+			socket.emit('keyPress', {inputId:'bomb',state:false});
 		
 	}
 	

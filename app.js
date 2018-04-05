@@ -85,7 +85,7 @@ var Entity = function(param) {
 	return self;
 }
 
-
+// PLAYER BEGIN
 var Player = function(param) {
 	var self = Entity(param);
 	
@@ -96,15 +96,19 @@ var Player = function(param) {
 	self.pressingUp = false;
 	self.pressingDown = false;
 	self.pressingAttack = false;
+	self.pressingBomb = false;
 	self.mouseAngle = 0;
 	self.maxSpd = 5;
 	self.hp = 10;
 	self.hpmax = 10;
 	self.score = 0;
 	self.canShoot = 0;
+	self.canShootBomb = 0;
 	self.fireRate = 20;
+	self.fireRateBomb = 80;
 	self.canons = 0;
 	self.bulletVelocity = 10;
+	self.bombRadius = 100;
 	
 	
 	var super_update = self.update;
@@ -114,6 +118,10 @@ var Player = function(param) {
 		super_update();
 		if(self.canShoot > 0) {
 			self.canShoot--;
+			
+		}
+		if(self.canShootBomb > 0) {
+			self.canShootBomb--;
 			
 		}
 		if(self.pressingAttack != false) {
@@ -138,6 +146,18 @@ var Player = function(param) {
 				
 			
 		}
+		if(self.pressingBomb != false) {
+			//console.log({x:self.x,y:self.y});
+			if(self.canShootBomb == 0) {
+				self.canShootBomb = parseInt(self.fireRateBomb);
+				self.shootBomb(self.mouseAngle, self.pressingAttack);
+				
+
+					 
+			}
+				
+			
+		}
 	} 
 	
 	self.updateFireRate = function(value) {
@@ -156,6 +176,23 @@ var Player = function(param) {
 			y:self.y,
 			map:self.map,
 			velocity:self.bulletVelocity
+		});
+		/*
+		Target({
+			parent:self.id,
+			targetX:target.x,
+			targetY:target.y,
+		});
+		*/
+	}
+	self.shootBomb = function(angle, target) {		
+		
+		Bomb({
+			parent:self.id,
+			x:self.x,
+			y:self.y,
+			map:self.map,
+			radius:self.bombRadius,
 		});
 		/*
 		Target({
@@ -199,6 +236,7 @@ var Player = function(param) {
 			score:self.score,
 			map:self.map,
 			canShoot:self.canShoot,
+			canShootBomb:self.canShootBomb,
 		};
 		
 	}
@@ -213,6 +251,7 @@ var Player = function(param) {
 			hp:self.hp,
 			score:self.score,
 			canShoot:self.canShoot,
+			canShootBomb:self.canShootBomb,
 		};
 		
 	}
@@ -244,6 +283,8 @@ Player.onConnect = function(socket, pseudo) {
 			player.pressingAttack = data.state;			
 		else if(data.inputId === 'mouseAngle') 
 			player.mouseAngle = data.state;
+		else if(data.inputId === 'bomb') 
+			player.pressingBomb = data.state;
 		
 	});
 
@@ -259,12 +300,17 @@ Player.onConnect = function(socket, pseudo) {
 		player.score -= 10;
 		player.bulletVelocity = data.value;
 	});
+	socket.on('updateBombRadius', function(data) {
+		player.score -= 10;
+		player.bombRadius = data.value;
+	});
 	
 	
 	socket.emit('init', {
 		selfId:socket.id,
 		player:Player.getAllInitPack(),
 		bullet:Bullet.getAllInitPack(),
+		bomb:Bomb.getAllInitPack(),
 		target:Target.getAllInitPack(),
 		food:Food.getAllInitPack(),
 	})
@@ -278,8 +324,6 @@ Player.getAllInitPack = function() {
 	return players;
 	
 }
-
-
 
 Player.onDisconnet = function(socket) {
 	delete Player.list[socket.id];
@@ -296,6 +340,7 @@ Player.update = function() {
 	return pack;
 }
 
+// BULLET BEGIN
 var Bullet = function(param) {
 	var self = Entity(param);
 	self.id = Math.random();
@@ -428,6 +473,147 @@ Bullet.getAllInitPack = function() {
 }
 
 
+// BOMB BEGIN
+var Bomb = function(param) {
+	var self = Entity(param);
+	self.id = Math.random();
+	self.radius = param.radius;
+	self.currentRadius = 0;
+	self.target = param.target;
+	self.parent = param.parent;
+	self.timer = 0;
+	self.toRemove = false;
+	var super_update = self.update;
+	
+	self.update = function() {
+		
+		if(self.currentRadius < self.radius) {
+			self.currentRadius += 3;
+		}
+		else {
+			self.toRemove = true;
+		}
+		/*
+		if(self.timer++ > 70) 
+			self.toRemove = true;
+			*/
+		super_update();
+		/*
+		for (var i in Target.list) {
+			var t = Target.list[i];
+			if(self.getDistance(t) < 18) {
+				self.toRemove = true;
+				Target.list[i].toRemove= true;
+			}
+		}
+		*/
+		for (var i in Food.list) {
+			var f = Food.list[i];
+			if(self.getDistance(f) < self.currentRadius) {
+				//self.toRemove = true;
+				
+				Food.list[i].hp -= 1;
+				if(Food.list[i].hp <= 0) {
+					Food.list[i].x = parseInt(getRandomInt(10,(GWIDTH-10)));
+					Food.list[i].y = parseInt(getRandomInt(10,(GWIDTH-10)));
+					Food.list[i].hp = Food.list[i].hpmax;
+					var shooter = Player.list[self.parent];
+					if(shooter) {
+						shooter.score += 1;
+						/*
+						if(shooter.score == 50
+							|| shooter.score == 100
+							|| shooter.score == 300) {
+							shooter.fireRate = 20;
+						}
+						shooter.updateFireRate(0.2);
+						*/
+					}
+						
+					
+				}
+			}
+		}	
+		
+		for (var i in Player.list) {
+			var p = Player.list[i];
+			if(self.map === p.map && self.getDistance(p) < self.currentRadius && self.parent !== p.id) {
+				//handle collision faire varier les PV
+				p.hp -=1;
+				
+				if(p.hp <=0) {
+					var shooter = Player.list[self.parent];
+					if(shooter)
+						shooter.score += 1;
+					p.hp = p.hpmax;
+					p.x = parseInt(getRandomInt(10,(GWIDTH-10)));
+					p.y = parseInt(getRandomInt(10,(GWIDTH-10)));
+				}
+				//self.toRemove = true;
+			}
+		}
+		
+	}
+	
+
+	
+	self.getInitPack = function() {
+		return {
+			id:self.id,
+			x:self.x,
+			y:self.y,
+			map:self.map,
+			target:self.target,
+			radius:self.currentRadius,
+		};
+		
+	}
+	
+	self.getUpdatePack = function() {
+		return {
+			id:self.id,
+			x:self.x,
+			y:self.y,
+			target:self.target,
+			radius:self.currentRadius,
+		};
+		
+	}
+	
+	Bomb.list[self.id] = self;
+	initPack.bomb.push(self.getInitPack());	
+	return self;
+}
+Bomb.list = {};
+
+Bomb.update = function() {
+	
+	var pack = [];
+	for(var i in Bomb.list) {
+		var bomb = Bomb.list[i];
+		bomb.update();
+		if(bomb.toRemove) {
+			delete Bomb.list[i];
+			removePack.bomb.push(bomb.id);
+		}
+		else {
+			pack.push(bomb.getUpdatePack());
+		}
+		
+	}
+	return pack;
+}
+
+Bomb.getAllInitPack = function() {
+	var bombs = [];
+	for(var i in Bomb.list) {
+		bombs.push(Bomb.list[i].getInitPack());
+	}
+	
+	return bombs;
+}
+
+// TARGET BEGIN
 var Target = function(param) {
 	
 	var self = Entity(param);
@@ -519,7 +705,7 @@ Target.getAllInitPack = function() {
 	return targets;
 }
 
-
+// FOOD BEGIN
 var Food = function(param) {
 	
 	var self = Entity(param);
@@ -603,7 +789,6 @@ Food.getAllInitPack = function() {
 	return foods;
 }
 
-
 var DEBUG = true;
 
 var io = require('socket.io')(serv, {});
@@ -673,6 +858,7 @@ setInterval(function() {
 	var pack = {
 		player:Player.update(),
 		bullet:Bullet.update(),
+		bomb:Bomb.update(),
 		target:Target.update(),
 		food:Food.update(),
 	}
@@ -686,10 +872,12 @@ setInterval(function() {
 	
 	initPack.player = [];
 	initPack.bullet = [];
+	initPack.bomb = [];
 	initPack.target = [];
 	initPack.food = [];
 	removePack.player = [];
 	removePack.bullet = [];
+	removePack.bomb = [];
 	removePack.target = [];
 	removePack.food = [];
 	
